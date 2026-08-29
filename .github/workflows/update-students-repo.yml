@@ -1,0 +1,44 @@
+name: Publish student template
+
+on:
+  push:
+    branches: [students]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-assignment2-student-template
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'PGE323M/assignment2-solution'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out sanitized student branch
+        uses: actions/checkout@v7
+
+      - name: Verify sanitized branch
+        run: |
+          test "$(git rev-list --count HEAD)" -eq 1
+          test ! -e assignment2.ipynb
+          test -e assignment2.py
+          test -e AGENTS.md
+          test -e test.py
+          ! grep --line-number --fixed-strings "TestAssignment2Private" \
+            assignment2.py test.py README.md AGENTS.md
+
+      - name: Push sanitized tree to public template
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$SSH_DEPLOY_KEY" > "$HOME/.ssh/deploy_key"
+          chmod 600 "$HOME/.ssh/deploy_key"
+          ssh-keyscan -H github.com > "$HOME/.ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $HOME/.ssh/deploy_key -o IdentitiesOnly=yes -o UserKnownHostsFile=$HOME/.ssh/known_hosts"
+          git remote set-url origin git@github.com:PGE323M/assignment2.git
+          git branch -M master
+          git push --force origin master
